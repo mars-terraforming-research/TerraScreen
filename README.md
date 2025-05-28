@@ -74,13 +74,15 @@ Bin  Qext    Qscat     W0      g      L1       L2 [Comment line #6]
 
 Note:
 * the 84 visible and 96 infrared spectral bands are hard-coded in `./setspi.f90` and `./setspv.f90` respectively , not read dynamically. 
-*The prefix `QEXT_96IR_84_VIS_` is expected for the input optical properties.
+* The prefix `QEXT_96IR_84_VIS_` is expected for the input optical properties. The rest of the name `QEXT_96IR_84_VIS_`*`XXXX`* is used to name the output files.
 
 ## Output files
 
 The output of the code are saved in the `/output/` directory as :
 * `output_XXXX.txt` if the code was ran with `equilibrate =.true.`
 * `static_XXXX.txt` if the code was ran with `equilibrate =.false.`
+
+Feel free to delete the files already present in `/output` and re-generate those. 
 
 The data structure of the `output_XXXX.txt` (ran to radiative equilibirum) and `static_XXXX.txt` (instantenous forcings) are identical:
 ```
