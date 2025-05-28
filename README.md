@@ -2,15 +2,15 @@
 Particle Screening Tool for Mars TerraForming
 
 
-The particle screening tool is a radiation code suitable to similate reprentative Martian atmospheric and surface temperature in the presence of natural or engineered aerosols.
+The particle screening tool is a radiative transfer code suitable to simulate representative Martian atmospheric and surface temperature in the presence of natural or engineered aerosols.
 
 # Quick start guide
 
-##Overview and compilation
+## Overview and compilation
 
 The main driver for this software package is `TerraScreen.f`. 
 
-You may open the file and notice various parameters,  mostly self-explanatory, that can be modified prior to compilation:
+You may open `TerraScreen.f` in a text editor and notice various parameters,  mostly self-explanatory, that can be modified prior to compilation:
 *  conrath-nu parameter  `CONRNU`  (define the vertical extend of the dust)
 *  cosine of the solar zenith angle `acosz`
 *  surface albedo  `ALBV`
@@ -20,9 +20,9 @@ You may open the file and notice various parameters,  mostly self-explanatory, t
 The code can be run in two modes, which are selected through a flag (~Line 150): 
 
 * When `equilibrate =.true.`, the code runs to radiative equilibrium, including a simple parameterization for convection
-* When `equilibrate =.false.`, the code does a single pass through the radiation without updating the temperature. The output can be interpreted as the radiative forcing resulting from instantenously injecting aerosols in the atmosphere.
+* When `equilibrate =.false.`, the code does a single pass through the radiation without updating the temperatures. The output can be interpreted as the radiative forcing resulting from instantenously injecting aerosols in the atmosphere.
 
-Additionally, the code is wrapped  within a main loop used to explore sensitity to a single paremeter. Typically, the code is ran for different visible opacities, defined within an array `tau_array`, but the code could be just as easily adapted to explore other any other parameter. 
+Additionally, the code is wrapped  within a main loop used to explore sensitivity to a single paremeter. Typically, the code is ran for different visible opacities, defined within an array `tau_array`, but the code could be just as easily adapted to explore other any other parameters. 
 ```
     parameter (i_tau=14) 
     real*8 tau_array(i_tau)
@@ -48,7 +48,7 @@ Because the optical properties are parsed at runtime, the code may be executed i
 ./batch_run.sh
 ```
 
-##Input structure
+## Input structure
 
 The optical properties are passed as a file in the data directory `/data/QEXT_96IR_84_VIS_XXX` that includes 
 
@@ -74,8 +74,9 @@ Bin  Qext    Qscat     W0      g      L1       L2 [Comment line #6]
 
 Note:
 * the 84 visible and 96 infrared spectral bands are hard-coded in `./setspi.f90` and `./setspv.f90` respectively , not read dynamically. 
-*The prefix `QEXT_96IR_84_VIS_` is expected for the input optical properties
-##Output files
+*The prefix `QEXT_96IR_84_VIS_` is expected for the input optical properties.
+
+## Output files
 
 The output of the code are saved in the `/output/` directory as :
 * `output_XXXX.txt` if the code was ran with `equilibrate =.true.`
@@ -118,7 +119,7 @@ This code  requires a Fortran compiler (e.g. gfortran). Some optional pre-proces
 ## Credits
 This project is based on the [NASA Ames Legacy GCM radiation code](https://github.com/nasa/legacy-mars-global-climate-model). This is an initial commit. Further update of the branch will be provided as patch to the NASA Ames Legacy GCM radiation code to properly credit the authors.  
 
-##License
+## License
 -------
 This project is licensed under the MIT License - see the LICENSE file for details.
 
