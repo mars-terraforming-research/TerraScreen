@@ -696,17 +696,29 @@ c        call cldprofile(psf,ptrop,nlev,sigma,pcld,tautotcld,taurefcld)
        write(69,'(a,f10.6)')     'Alb sfc        ,',ALBV
        write(69,'(a,f10.6)')     'Conrath nu     ,',CONRNU
        write(69,'(a,f10.6)')     'Sun Flux (W/m2),',fluxdnv(1)
-       write(69,'(a,200(a,f12.4))')  'BWN IR (cm-1)  ',
-     * (",",WNOI(L),L=1,L_NSPECTI+1)  
-       write(69,'(a,200(a,f12.4))')  'BWN VIS (cm-1) ',
-     * (",",WNOV(L),L=1,L_NSPECTV+1)     
-      
-       write(69,'(a,200(a,f10.6))')'P [mbar]       ',
+       write(69,'(a,f12.4,200(a,f12.4))')  'BWN IR (cm-1)  ,',
+     * WNOI(1)-DWNI(1)/2,(",",WNOI(L)+DWNI(L)/2,L=2,L_NSPECTI)  
+       write(69,'(a,f12.4,200(a,f12.4))')  'BWN VIS (cm-1) ,',
+     * WNOV(1)-DWNV(1)/2,(",",WNOV(L)+DWNV(L)/2,L=2,L_NSPECTV)  
+       write(69,'(a)')'================'     
+       write(69,'(a,200(a,f12.6))')'wavelenght [um]',
+     * (",",10**4/WNOV(L),L=L_NSPECTV,1,-1),
+     * (",",10**4/WNOI(L),L=L_NSPECTI,1,-1)   
+       write(69,'(a,200(a,f12.4))')'Qext           ',
+     * (",",QEXTV(L),L=L_NSPECTV,1,-1),
+     * (",",QEXTI(L),L=L_NSPECTI,1,-1) 
+       write(69,'(a,200(a,f12.4))')'Qscat          ',
+     * (",",QSCATV(L),L=L_NSPECTV,1,-1),
+     * (",",QSCATI(L),L=L_NSPECTI,1,-1) 
+       write(69,'(a,200(a,f10.4))')'G factor       ',
+     * (",",GV(L),L=L_NSPECTV,1,-1),
+     * (",",GI(L),L=L_NSPECTI,1,-1) 
+       write(69,'(a)')'================'     
+       write(69,'(a,200(a,f10.4))')'P [mbar]       ',
      * (",",plev(2*L),L=2,L_NLAYRAD)
          write(69,'(a,200(a,f10.4))')'Temp initial[K]',
      * (",",tlev(2*L),L=2,L_NLAYRAD)
-        write(69,'(a)')'==============================================='
-        
+        write(69,'(a)')'================'
         write(69,'(a,a,a,a,a,a,a,a,400(a,I0.2))')'it   ,',
      *'   tau    ,',
      *'  Tsfc    ,','   alb    ,','   OLR    ,','    ASR   ,',

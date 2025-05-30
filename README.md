@@ -72,7 +72,7 @@ Bin  Qext    Qscat     W0      g      L1       L2 [Comment line #6]
  96    1.374   1.280   0.932  0.484  4.66  4.50 
 ```
 
-Note:
+Notes:
 * the 84 visible and 96 infrared spectral bands are hard-coded in `./setspi.f90` and `./setspv.f90` respectively , not read dynamically. 
 * The prefix `QEXT_96IR_84_VIS_` is expected for the input optical properties. The rest of the name `QEXT_96IR_84_VIS_`*`XXXX`* is used to name the output files.
 
@@ -95,9 +95,16 @@ Conrath nu     , [conrath-nu parameter]
 Sun Flux (W/m2), [solar flux at the top of the colum]
 BWN IR (cm-1)  , [infrared bounds, in wavenumber]
 BWN VIS (cm-1) , [visible bounds , in wavenumber]
-P [mbar]       , [layer mid-ppoints pressures in mbar]
-Temp initial[K], [initial temperature [profile]
-===============================================
+================
+wavelenght [um], [Center wavelenght for each band VIS>IR]  
+Qext           , [Exctinction efficiency for each band VIS>IR]  
+Qscat          , [Scattering efficiency for each band VIS>IR] 
+G factor       , [Assymetry factor for each band VIS>IR]
+================
+P [mbar]       ,  [layer mid-ppoints pressures in mbar]
+Temp initial[K],  [initial temperature [profile]
+================
+
 it   ,  tau  , Tsfc , alb , OLR  , ASR ,  NET top , NET bot , T lev[k], OLR [nIR],ASR [nVIS],OLR [nIR],ASR [nVIS],SFC DIR[nIR],SFC DVIS[nVIS]
 [...]
 ```
@@ -106,8 +113,8 @@ With
 * `tau`: visible opacity at 670nm
 * `Tsfc`: surface temperature [K]
 * `alb` : top of the atmosphere (TOA) albedo = upward vis/downward vis 
-* `OLR` : outgoing lonwave radiation, integrated value [W/m2]
-* `ASR` : outgoing lonwave radiation, integrated value [W/m2]
+* `OLR` : outgoing longwave radiation, integrated value [W/m2]
+* `ASR` : absorbed shortwave radiation (down VIS- up VIS), integrated value [W/m2]
 * `NET top`: radiative budget at the TOA: down IR +down VIS - up IR -up VIS [W/m2]
 * `NET bot`: radiative budget at the bottom of atmosphere (BOA): down IR +down VIS - up IR -up VIS [W/m2]
 * `T lev[k]`: temperature at the model's pressure levels
@@ -115,6 +122,12 @@ With
 * `ASR [nVIS]`: Absorbed solar radiation (down VIS- up VIS) at the TOA in the 84 bands [W/m2/um]
 * `SFC DIR[nIR]`: Downward radiation at the BOA for the 96 IR bands [W/m2/um]
 * `SFC DVIS[nVIS]`: Downward radiation at the BOA for the 84 VIS bands [W/m2/um]
+
+Notes:
+* The widths for the IR (resp. VIS) bands can be calculated as `DWNI(N)= BWNI(N+1)-BWNI(N)` (resp. `DWNV(N)= BWNV(N+1)-BWNV(N)`) in [cm-1]
+* The center wavenumbers for the IR (resp. VIS) bands can be calculated as  `WNI(N)=BWNI(N)+DWNI(N)/2` (resp. `WNV(N)=BWNI(N)+DWNV(N)/2`) in [cm-1]
+* The conversion from wavenumber to wavelenght for either the centers or the edges of the IR (resp. VIS) bands are `WLI=10**4/WNI` (resp. `WLV=10**4/WNV`) in [um]
+* `wavelenght`, `Qext`, `Qscat` and `G` in the table above are provided for both the VIS and IR bands by increasing *wavelength*. Therefore, those arrays would need to be inverted from *right* to *left* to match the `BWN IR` and `BWN VIS` bands.
 ## Requirements
 This code  requires a Fortran compiler (e.g. gfortran). Some optional pre-processing and analysis scripts are provided in Python.
 
