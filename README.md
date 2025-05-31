@@ -125,7 +125,7 @@ With
 
 Notes:
 * The widths for the IR (resp. VIS) bands can be calculated as `DWNI(N)= BWNI(N+1)-BWNI(N)` (resp. `DWNV(N)= BWNV(N+1)-BWNV(N)`) in [cm-1]
-* The center wavenumbers for the IR (resp. VIS) bands can be calculated as  `WNI(N)=BWNI(N)+DWNI(N)/2` (resp. `WNV(N)=BWNI(N)+DWNV(N)/2`) in [cm-1]
+* The center wavenumbers for the IR (resp. VIS) bands can be calculated as  `WNI(N)=BWNI(N)+DWNI(N)/2` (resp. `WNV(N)=BWNV(N)+DWNV(N)/2`) in [cm-1]
 * The conversion from wavenumber to wavelenght for either the centers or the edges of the IR (resp. VIS) bands are `WLI=10**4/WNI` (resp. `WLV=10**4/WNV`) in [um]
 * `wavelenght`, `Qext`, `Qscat` and `G` in the table above are provided for both the VIS and IR bands by increasing *wavelength*. Therefore, those arrays would need to be inverted from *right* to *left* to match the `BWN IR` and `BWN VIS` bands.
 ## Requirements
