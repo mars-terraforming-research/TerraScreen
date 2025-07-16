@@ -697,9 +697,9 @@ c        call cldprofile(psf,ptrop,nlev,sigma,pcld,tautotcld,taurefcld)
        write(69,'(a,f10.6)')     'Conrath nu     ,',CONRNU
        write(69,'(a,f10.6)')     'Sun Flux (W/m2),',fluxdnv(1)
        write(69,'(a,f12.4,200(a,f12.4))')  'BWN IR (cm-1)  ,',
-     * WNOI(1)-DWNI(1)/2,(",",WNOI(L)+DWNI(L)/2,L=2,L_NSPECTI)  
+     * WNOI(1)-DWNI(1)/2,(",",WNOI(L)+DWNI(L)/2,L=1,L_NSPECTI)  
        write(69,'(a,f12.4,200(a,f12.4))')  'BWN VIS (cm-1) ,',
-     * WNOV(1)-DWNV(1)/2,(",",WNOV(L)+DWNV(L)/2,L=2,L_NSPECTV)  
+     * WNOV(1)-DWNV(1)/2,(",",WNOV(L)+DWNV(L)/2,L=1,L_NSPECTV)  
        write(69,'(a)')'================'     
        write(69,'(a,200(a,f12.6))')'wavelenght [um]',
      * (",",10**4/WNOV(L),L=L_NSPECTV,1,-1),
