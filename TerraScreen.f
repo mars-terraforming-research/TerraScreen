@@ -120,10 +120,6 @@
       tau_array = (/0.,0.05,0.1,0.15,0.2,0.3,0.4,0.5,0.75,1.,1.25,
      * 1.5,1.75,2./)
      
-!      tau_array = (/0.,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.,0.0,
-!     * 0.0,0.0,0.0/)
-!      tau_array = (/0.,0.05/)
-
 
 !      alb_array = (/0.2194,0.1783,0.1459,0.1199,0.0989,0.0677,0.0468,
 !     * 0.0326,0.0139,0.0067,0.0038,0.0026, 0.0021,0.0019/)
@@ -159,7 +155,6 @@
 
 
       call radsetup
-      
       if (equilibrate) then
         open(69,file='output/output_'//trim(filename_Qext(18:))//'.txt')
       else 
@@ -241,7 +236,7 @@
 !  RSDIST is the square of the sun-Mars distance, in AU.
 
       rsdist = 2.318
-      global_avg= .50731 ! 1: incident sunc | 1/4 for global average
+      global_avg= .50731 ! = 1/4 when combined with acosz
                          !.50731 tuned to give a netflux of 0 W/m2 
       gcmlayers = L_LAYERS
 !============================
@@ -699,7 +694,9 @@ c        call cldprofile(psf,ptrop,nlev,sigma,pcld,tautotcld,taurefcld)
        write(69,'(a,f12.4,200(a,f12.4))')  'BWN IR (cm-1)  ,',
      * WNOI(1)-DWNI(1)/2,(",",WNOI(L)+DWNI(L)/2,L=1,L_NSPECTI)  
        write(69,'(a,f12.4,200(a,f12.4))')  'BWN VIS (cm-1) ,',
-     * WNOV(1)-DWNV(1)/2,(",",WNOV(L)+DWNV(L)/2,L=1,L_NSPECTV)  
+     * WNOV(1)-DWNV(1)/2,(",",WNOV(L)+DWNV(L)/2,L=1,L_NSPECTV) 
+       write(69,'(a,200(a,f12.4))')  'SUN VIS (W/m2) ',
+     * (",",SOL(L)*acosz,L=1,L_NSPECTV)
        write(69,'(a)')'================'     
        write(69,'(a,200(a,f12.6))')'wavelenght [um]',
      * (",",10**4/WNOV(L),L=L_NSPECTV,1,-1),
@@ -710,7 +707,7 @@ c        call cldprofile(psf,ptrop,nlev,sigma,pcld,tautotcld,taurefcld)
        write(69,'(a,200(a,f12.4))')'Qscat          ',
      * (",",QSCATV(L),L=L_NSPECTV,1,-1),
      * (",",QSCATI(L),L=L_NSPECTI,1,-1) 
-       write(69,'(a,200(a,f10.4))')'G factor       ',
+       write(69,'(a,200(a,f12.4))')'G factor       ',
      * (",",GV(L),L=L_NSPECTV,1,-1),
      * (",",GI(L),L=L_NSPECTI,1,-1) 
        write(69,'(a)')'================'     
