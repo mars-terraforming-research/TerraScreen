@@ -84,7 +84,7 @@ The output of the code are saved in the `/output/` directory as :
 
 Feel free to delete the files already present in `/output` and re-generate those. 
 
-The data structure of the `output_XXXX.txt` (ran to radiative equilibirum) and `static_XXXX.txt` (instantenous forcings) are identical:
+The data structure of the `output_XXXX.txt` (ran to radiative equilibrium) and `static_XXXX.txt` (instantenous forcings) are identical:
 ```
 Particle       , [input file]
 Ncase          , [number of case ran]
@@ -95,6 +95,7 @@ Conrath nu     , [conrath-nu parameter]
 Sun Flux (W/m2), [solar flux at the top of the colum]
 BWN IR (cm-1)  , [infrared bounds, in wavenumber]
 BWN VIS (cm-1) , [visible bounds , in wavenumber]
+SUN VIS (W/m2) , [solar irradiance in each wavenumber bands]
 ================
 wavelenght [um], [Center wavelenght for each band VIS>IR]  
 Qext           , [Exctinction efficiency for each band VIS>IR]  
