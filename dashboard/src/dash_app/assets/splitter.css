@@ -1,0 +1,22 @@
+#grid{
+  display:grid;
+  grid-template-columns: var(--left,22rem) 10px minmax(0,1fr) 10px var(--right,26rem);
+  grid-template-rows: 100vh;
+  height:100vh; overflow:hidden;
+}
+
+/* Dividers */
+.splitter{
+  position:relative; z-index:5;
+  background: linear-gradient(90deg,#e9ecef,#cfd8dc,#e9ecef);
+  cursor: col-resize; user-select:none;
+}
+.splitter:hover{ background:#cfd8dc; }
+/* Larger hit area so it’s easy to grab anywhere near the divider */
+.splitter::before{
+  content:""; position:absolute; top:0; bottom:0; left:-8px; right:-8px;
+}
+
+#left,#center,#right{ overflow:auto; box-sizing:border-box; }
+#left{ border-right:1px solid #eee; }
+#right{ border-left:1px solid #eee; }

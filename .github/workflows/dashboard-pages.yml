@@ -1,0 +1,65 @@
+name: Dashboard • Build & Deploy Pages
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'dashboard/**'
+      - '.github/workflows/dashboard-pages.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'dashboard/**'
+      - '.github/workflows/dashboard-pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write         # required by deploy-pages
+  id-token: write      # required by deploy-pages
+
+concurrency:
+  group: 'pages'
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build dashboard (dist)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: dashboard   # all commands run in ./dashboard
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: 'dashboard/package-lock.json'
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Build
+        # Vite: npm run build (base: './' in vite.config.ts)
+        # Parcel alternative: npx parcel build src/index.html --public-url ./
+        run: npm run build
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dashboard/dist  # <-- deploy exactly what's in dist
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4
