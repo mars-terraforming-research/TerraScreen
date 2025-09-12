@@ -1,0 +1,7 @@
+.cache/
+dist
+node_modules
+.vscode
+pyodide
+dash
+temp

@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <title>Dash-WebAssembly</title>
+
+  <style>
+    #grid{
+      display:grid;
+      grid-template-columns: var(--left,22rem) 10px minmax(0,1fr) 10px var(--right,26rem);
+      grid-template-rows: 100vh;
+      height:100vh; overflow:hidden;
+    }
+    .splitter{
+      position:relative; z-index:20;
+      background: linear-gradient(90deg,#e9ecef,#cfd8dc,#e9ecef);
+      cursor: col-resize; user-select:none;
+    }
+    .splitter:hover{ background:#cfd8dc; }
+    .splitter::before{ content:""; position:absolute; top:0; bottom:0; left:-8px; right:-8px; }
+    #left,#center,#right{ overflow:auto; box-sizing:border-box; }
+    #left{ border-right:1px solid #eee; }
+    #right{ border-left:1px solid #eee; }
+  </style>
+
+</head>
+
+<script>
+(function(){
+  function init(){
+    const grid = document.getElementById('grid');
+    const s1 = document.getElementById('split-1');
+    const s2 = document.getElementById('split-2');
+    if (!grid || !s1 || !s2) return false;
+
+    let dragging = 0;
+    function setLeft(px){ grid.style.setProperty('--left', Math.max(0, px) + 'px'); }
+    function setRight(px){ grid.style.setProperty('--right', Math.max(0, px) + 'px'); }
+    function rect(){ return grid.getBoundingClientRect(); }
+
+    function onMove(clientX){
+      if (!dragging) return;
+      const r = rect();
+      if (dragging === 1) setLeft(clientX - r.left);
+      if (dragging === 2) setRight(r.right - clientX);
+    }
+    function onPointerMove(e){
+      const x = (e.touches && e.touches[0]) ? e.touches[0].clientX : e.clientX;
+      onMove(x);
+      if (dragging) e.preventDefault();
+    }
+    function onPointerUp(){ dragging = 0; document.body.style.cursor = ''; }
+    function start(which){ return (e) => { dragging = which; document.body.style.cursor = 'col-resize'; e.preventDefault(); }; }
+
+    s1.addEventListener('mousedown', start(1));
+    s2.addEventListener('mousedown', start(2));
+    s1.addEventListener('touchstart', start(1), {passive:false});
+    s2.addEventListener('touchstart', start(2), {passive:false});
+    window.addEventListener('mousemove', onPointerMove, {passive:false});
+    window.addEventListener('touchmove', onPointerMove, {passive:false});
+    window.addEventListener('mouseup', onPointerUp);
+    window.addEventListener('touchend', onPointerUp);
+    return true;
+  }
+
+  // In WebDash, the layout is injected after the page loads. Use a MutationObserver so we
+  // hook up the splitters once #grid exists.
+  if (!init()){
+    const mo = new MutationObserver(() => { if (init()) mo.disconnect(); });
+    mo.observe(document.documentElement, {childList:true, subtree:true});
+  }
+})();
+</script>
+
+<body>
+  <style>
+    .loading-page {
+      display: flex;
+      flex-direction: column;
+      background: #222222;
+      color: white;
+      align-items: center;
+      justify-content: center;
+      align-content: center;
+      min-height: 100vh;
+      font-size: 2em;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+    }
+
+    .spinner {
+      border-top: 10px solid #13be3e;
+      border-right: 10px solid #e3e701;
+      border-bottom: 10px solid #00c0f0;
+      border-left: 10px solid #f010ca;
+      border-radius: 50%;
+      width: 1.5em;
+      height: 1.5em;
+      animation: spin 2s linear infinite;
+    }
+
+    .status {
+      font-size: 0.5em;
+      margin-top: 1em;
+      color: darkseagreen;
+      font-family: consolas;
+      max-width: 70%;
+    }
+
+    .lds-ellipsis {
+      display: inline-block;
+      position: relative;
+      width: 80px;
+      height: 80px;
+    }
+
+    .lds-ellipsis div {
+      position: absolute;
+      top: 33px;
+      width: 13px;
+      height: 13px;
+      border-radius: 50%;
+      background: #fff;
+      animation-timing-function: cubic-bezier(0, 1, 1, 0);
+    }
+
+    .lds-ellipsis div:nth-child(1) {
+      left: 8px;
+      animation: lds-ellipsis1 0.6s infinite;
+    }
+
+    .lds-ellipsis div:nth-child(2) {
+      left: 8px;
+      animation: lds-ellipsis2 0.6s infinite;
+    }
+
+    .lds-ellipsis div:nth-child(3) {
+      left: 32px;
+      animation: lds-ellipsis2 0.6s infinite;
+    }
+
+    .lds-ellipsis div:nth-child(4) {
+      left: 56px;
+      animation: lds-ellipsis3 0.6s infinite;
+    }
+
+    @keyframes lds-ellipsis1 {
+      0% {
+        transform: scale(0);
+      }
+
+      100% {
+        transform: scale(1);
+      }
+    }
+
+    @keyframes lds-ellipsis3 {
+      0% {
+        transform: scale(1);
+      }
+
+      100% {
+        transform: scale(0);
+      }
+    }
+
+    @keyframes lds-ellipsis2 {
+      0% {
+        transform: translate(0, 0);
+      }
+
+      100% {
+        transform: translate(24px, 0);
+      }
+    }
+
+
+    body,
+    html {
+      margin: 0;
+      padding: 0;
+    }
+  </style>
+  <div class="loading-page">
+    <p>Dash is loading</p>
+    <div class="lds-ellipsis">
+      <div></div>
+      <div></div>
+      <div></div>
+      <div></div>
+    </div>
+    <div class="status"></div>
+  </div>
+  <script src="./dash_app/cross_filtering_app.ts"></script>
+  <script src="./webdash.ts"></script>
+</body>
+
+</html>
