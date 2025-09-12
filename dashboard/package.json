@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "NODE_ENV=development node src/dev-server.js 8080 dist true",
     "prod": "NODE_ENV=production node src/dev-server.js 8080 dist true",
-    "build": "NODE_ENV=production parcel build src/index.html --public-url ./ --out-dir dist",
+    "build": "NODE_ENV=production parcel build src/index.html --public-url ./ --out-dir dist && npx cpx \"src/dash_app/assets/**/*\" dist/assets",
     "setup": "make setup"
   },
   "author": "Bloomberg LP",
