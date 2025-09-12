@@ -77,7 +77,7 @@ def read_output(filename,tau_target=None):
         pass
     #Load output in bject
     MOD=model()
-    #Store the filename as an attribute
+    #Save all the static variables
     setattr(MOD,'name',filename)
     setattr(MOD,'Qext670',Qext670)
     setattr(MOD,'alb_sfc',alb_sfc)
@@ -94,9 +94,11 @@ def read_output(filename,tau_target=None):
     setattr(MOD,'Qscat',Qscat)
     setattr(MOD,'g',g)
     setattr(MOD,'wl',wl)
+    setattr(MOD,'Tref',Tref)
+    setattr(MOD,'Pref',Pref)
 
     #Save variables
-    var_list=['tau','ts','alb','OLR','ASR','net_top','net_bot','OLR_WL','ASR_WL','SFC_dIR','SFC_dVIS']
+    var_list=['tau','ts','alb','OLR','ASR','net_top','net_bot','OLR_WL','ASR_WL','SFC_dIR','SFC_dVIS','T']
     #Store variables as attributes
     for ivar in var_list:
         if tau_target is None:
