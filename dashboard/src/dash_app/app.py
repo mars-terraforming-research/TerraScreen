@@ -5,6 +5,7 @@ import itertools
 from functools import lru_cache
 
 import numpy as np
+import io
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
@@ -120,6 +121,7 @@ def _apply_dark_theme(fig):
     fig.update_xaxes(gridcolor="rgba(255,255,255,0.08)")
     fig.update_yaxes(gridcolor="rgba(255,255,255,0.08)")
     return fig
+
 
 # ------- Repo config -------
 OWNER  = "mars-terraforming-research"
@@ -293,183 +295,212 @@ def read_static_case(file_name: str, tau_target_rounded: float) -> StaticCase:
                       bwni=bwni, bwnv=bwnv, solar_WN=solar_WN,
                       OLR_WL=OLR_WL, ASR_WL=ASR_WL)
 
-# ------- Band “tops” drawing helpers -------
-def _segments_from_bounds(bounds_um: np.ndarray, values: np.ndarray):
-    xs, ys = [], []
-    for left, right, v in zip(bounds_um[:-1], bounds_um[1:], values):
-        xs.extend([left, right, None])
-        ys.extend([v,    v,    None])
-    return xs, ys
+def read_output_from_content(file_content, tau_target=None):
+    '''
+    Modified version of terrascreen_lib.read_output() that works with string content
+    instead of file paths (for dashboard use with GitHub fetching)
+    '''
+    # Convert string content to file-like object
+    f = io.StringIO(file_content)
+    
+    # Rest is identical to original read_output function
+    Nlev = 24
+    L_NSPECTI = 96
+    L_NSPECTV = 84
+    
+    part_name = f.readline().split(',')[1]
+    Ncase = int(f.readline().split(',')[1])
+    dt = float(f.readline().split(',')[1])
+    Qext670 = float(f.readline().split(',')[1])
+    alb_sfc = float(f.readline().split(',')[1])
+    conrath_nu = float(f.readline().split(',')[1])
+    solar_flux = float(f.readline().split(',')[1])
+    bwni = np.array([float(x) for x in f.readline().split(',')[1:]])
+    bwnv = np.array([float(x) for x in f.readline().split(',')[1:]])
+    solar_WN = np.array([float(x) for x in f.readline().split(',')[1:]])
+    f.readline()  # skip ====
+    wl = np.array([float(x) for x in f.readline().split(',')[1:]])
+    Qext = np.array([float(x) for x in f.readline().split(',')[1:]])
+    Qscat = np.array([float(x) for x in f.readline().split(',')[1:]])
+    g = np.array([float(x) for x in f.readline().split(',')[1:]])
+    f.readline()  # skip ====
+    Pref = np.array([float(x) for x in f.readline().split(',')[1:]])
+    Tref = np.array([float(x) for x in f.readline().split(',')[1:]])
+    [f.readline() for _ in range(2)]  # skip 2 line
+    
+    # Read data arrays
+    T = np.zeros((Ncase, Nlev))
+    OLR_WL, SFC_dIR = [np.zeros((Ncase, L_NSPECTI)) for _ in range(2)]
+    ASR_WL, SFC_dVIS = [np.zeros((Ncase, L_NSPECTV)) for _ in range(2)]
+    tau, ts, net_top, net_bot, alb, OLR, ASR = [np.zeros((Ncase)) for _ in range(7)]
+    
+    for i in range(Ncase):
+        vals = np.array([float(x) for x in f.readline().split(',')])
+        tau[i] = vals[1]
+        ts[i] = vals[2]
+        alb[i] = vals[3]
+        OLR[i] = vals[4]
+        ASR[i] = vals[5]
+        net_top[i] = vals[6]
+        net_bot[i] = vals[7]
+        T[i, :] = vals[8:8+Nlev]
+        OLR_WL[i, :] = vals[9+Nlev:9+Nlev+L_NSPECTI]
+        ASR_WL[i, :] = vals[9+Nlev+L_NSPECTI:9+Nlev+L_NSPECTI+L_NSPECTV]
+        SFC_dIR[i, :] = vals[9+Nlev+L_NSPECTI+L_NSPECTV:9+Nlev+2*L_NSPECTI+L_NSPECTV]
+        SFC_dVIS[i, :] = vals[9+Nlev+2*L_NSPECTI+L_NSPECTV:]
+    f.close()
 
-def _vertical_sides(bounds_um: np.ndarray, values: np.ndarray):
-    xs, ys = [], []
-    for left, right, v in zip(bounds_um[:-1], bounds_um[1:], values):
-        xs.extend([left, left, None,  right, right, None])
-        ys.extend([0,    v,    None,  0,     v,     None])
-    return xs, ys
+    # Compute center wavenumber
+    res_wn_bwni = bwni[1:] - bwni[0:-1]
+    center_wn_bwni = bwni[0:-1] + res_wn_bwni/2
+    res_wn_bwnv = bwnv[1:] - bwnv[0:-1]
+    center_wn_bwnv = bwnv[0:-1] + res_wn_bwnv/2
+    
+    # Initialize model
+    class model(object):
+        pass
+    MOD = model()
+    
+    # Save all the static variables
+    setattr(MOD, 'name', 'from_content')
+    setattr(MOD, 'Qext670', Qext670)
+    setattr(MOD, 'alb_sfc', alb_sfc)
+    setattr(MOD, 'conrath_nu', conrath_nu)
+    setattr(MOD, 'solar_flux', solar_flux)
+    setattr(MOD, 'bwni', bwni)
+    setattr(MOD, 'bwnv', bwnv)
+    setattr(MOD, 'solar_WN', solar_WN)
+    setattr(MOD, 'wni', center_wn_bwni)
+    setattr(MOD, 'wnv', center_wn_bwnv)
+    setattr(MOD, 'wli', 10**4/center_wn_bwni)
+    setattr(MOD, 'wlv', 10**4/center_wn_bwnv)
+    setattr(MOD, 'Qext', Qext)
+    setattr(MOD, 'Qscat', Qscat)
+    setattr(MOD, 'g', g)
+    setattr(MOD, 'wl', wl)
+    setattr(MOD, 'Tref', Tref)
+    setattr(MOD, 'Pref', Pref)
 
+    # Save variables
+    var_list = ['tau', 'ts', 'alb', 'OLR', 'ASR', 'net_top', 'net_bot', 'OLR_WL', 'ASR_WL', 'SFC_dIR', 'SFC_dVIS', 'T']
+    for ivar in var_list:
+        if tau_target is None:
+            setattr(MOD, ivar, eval(ivar))
+        else:
+            itau = np.argmin(np.abs(tau - tau_target))
+            setattr(MOD, ivar, eval('%s[%i,...]' % (ivar, itau)))
+    return MOD
 
-def _add_bandline(fig, bounds_um, per_um, *, name, color=None, width=2.0, sides=False, side_width=0.5):
-    x, y = _segments_from_bounds(bounds_um, per_um)
-    fig.add_trace(go.Scatter(
-        name=name, x=x, y=y, mode="lines",
-        line=dict(width=width, color=color),
-        hovertemplate="λ band<extra>"+name+"</extra>"
-    ))
-    if sides:
-        xs, ys = _vertical_sides(bounds_um, per_um)
-        fig.add_trace(go.Scatter(
-            name=name+" (bands)", showlegend=False,
-            x=xs, y=ys, mode="lines",
-            line=dict(width=side_width, color=color),
-            hoverinfo="skip"
-        ))
-
-# ------- Figures -------
-def _segment_trace(bounds_um, values_per_um, *, name, color, show_sides=False, width=2, showlegend=True):
+def create_step_trace_original(bounds_wn, var, name, color, show_sides=True):
     """
-    Draw horizontal 'tops' for each bin (x0..x1 at y), with None gaps
-    between bins so nothing connects. Optionally add thin vertical sides.
-    bounds_um: array of edges (length N+1, ascending in μm)
-    values_per_um: array of per-μm values (length N)
+    Exact copy of the working step trace function from original code.
+    This creates the proper wavelength bins using center +/- half-width method.
     """
-    b = np.asarray(bounds_um, dtype=float)
-    v = np.asarray(values_per_um, dtype=float)
-    n = len(b) - 1
-    if n <= 0 or len(v) != n:
-        return []
+    x_vals, y_vals = [], []
+    
+    res_wn = bounds_wn[1:] - bounds_wn[:-1]
+    center_wn = bounds_wn[:-1] + res_wn/2
+    
+    for i, val in enumerate(var):
+        left = center_wn[i] - res_wn[i]/2
+        right = center_wn[i] + res_wn[i]/2
+        
+        if show_sides:
+            x_vals.extend([left, left, right, right])
+            y_vals.extend([0, val, val, 0])
+        else:
+            x_vals.extend([left, right])
+            y_vals.extend([val, val])
+        
+        if i < len(var) - 1:
+            x_vals.append(None)  # Break line
+            y_vals.append(None)
+    
+    return go.Scatter(x=x_vals, y=y_vals, name=name, 
+                     line=dict(color=color, width=2), mode='lines',
+                     hovertemplate="λ: %{x:.4g} μm<br>Value: %{y:.4g}<extra>"+name+"</extra>",
+                     connectgaps=False)
 
-    # horizontal tops per bin
-    xt, yt = [], []
-    for i in range(n):
-        x0, x1, y = b[i], b[i+1], v[i]
-        xt += [x0, x1, None]
-        yt += [y,  y,  None]
-
-    traces = [go.Scatter(
-        x=xt, y=yt, mode="lines",
-        name=name, showlegend=showlegend,
-        line=dict(color=color, width=width),
-        hoverinfo="x+y+name",
-    )]
-
-    if show_sides:
-        xs, ys = [], []
-        for i in range(n):
-            x0, x1, y = b[i], b[i+1], v[i]
-            xs += [x0, x0, None, x1, x1, None]
-            ys += [0,  y,  None, 0,  y,  None]
-        traces.append(go.Scatter(
-            x=xs, y=ys, mode="lines",
-            name=f"{name} (sides)", showlegend=False,
-            line=dict(color=color, width=0.5),
-            hoverinfo="skip",
-        ))
-    return traces
-
-
-def _pretty_label(fname: str) -> str:
-    s = fname
-    if s.startswith("static_"): s = s[len("static_"):]
-    if s.endswith(".txt"): s = s[:-4]
-    return s.replace("_", " ")
-
-
-# --------------------------------------------
-# replacement: spectral budget figure
-# --------------------------------------------
 def spectral_budget_figure(cases, tau_target: float):
     """
-    Stacked spectral budget (VIS solar + VIS/IR net). IR scaled ×20.
-    Draw VIS and IR segments separately to avoid any stitch artifact.
+    CORRECTED VERSION - Uses read_output logic with dashboard fetching.
+    This should eliminate all artifacts by using the exact same data parsing
+    and plotting approach as the working original code.
+    
+    REPLACE your existing spectral_budget_figure function with this one.
     """
-    FACT_IR = 20.0
+    fact_plot = 20  # IR scaling factor (matches original)
     fig = go.Figure()
 
-    # ---- clear reference (dust1.5 at τ=0) ----
-    clear = read_static_case("static_dust1.5.txt", 0.0)
+    try:
+        # Fetch and parse clear reference case using read_output logic
+        clear_content = fetch_text_cached(RAW_BASE + "static_dust1.5.txt")
+        clear = read_output_from_content(clear_content, 0.)
+        
+        # EXACT same wavelength calculation as working original
+        bnwlv = 10**4 / clear.bwnv[::-1]
+        bnwli = 10**4 / clear.bwni[::-1] 
+        all_wl_bounds = np.append(bnwlv, bnwli[1:])
+        res_wl = all_wl_bounds[1:] - all_wl_bounds[:-1]
+        res_wl_vis = bnwlv[1:] - bnwlv[:-1]
 
-    # Bin edges in μm (ascending)
-    bnwli = 1e4 / clear.bwni[::-1]  # IR edges
-    bnwlv = 1e4 / clear.bwnv[::-1]  # VIS edges
+        # Solar spectrum (exact same as original)
+        if hasattr(clear, 'solar_WN') and clear.solar_WN is not None and len(clear.solar_WN):
+            solar_trace = create_step_trace_original(
+                bnwlv, clear.solar_WN[::-1]/res_wl_vis, 
+                'solar flux', '#ffffff', show_sides=False
+            )
+            fig.add_trace(solar_trace)
 
-    # Per-bin widths (μm)
-    w_vis = np.diff(bnwlv)          # 84
-    w_ir  = np.diff(bnwli)          # 96
+        # Clear reference (exact same as original)
+        net_clear = np.append(clear.ASR_WL[::-1], -fact_plot * clear.OLR_WL[::-1])
+        clear_trace = create_step_trace_original(
+            all_wl_bounds, net_clear/res_wl,
+            'clear (no aerosol)', '#f6a21a', show_sides=True
+        )
+        fig.add_trace(clear_trace)
 
-    # ---- solar flux (VIS only) ----
-    if getattr(clear, "solar_WN", None) is not None:
-        sol_vis = np.asarray(clear.solar_WN[::-1], dtype=float)
-        m = int(min(len(sol_vis), len(w_vis)))
-        if m > 0:
-            y_sol = sol_vis[:m] / w_vis[:m]
-            for tr in _segment_trace(bnwlv[:m+1], y_sol,
-                                     name="solar flux", color="#1f1f1f",
-                                     show_sides=False, width=2, showlegend=True):
-                fig.add_trace(tr)
+        # Selected cases - use same read_output logic
+        for fname in (cases or []):
+            try:
+                case_content = fetch_text_cached(RAW_BASE + fname)
+                case = read_output_from_content(case_content, tau_target)
+                label = _basename(fname).replace("_", " ")
+                color = color_for(_basename(fname))
 
-    # ---- clear net (tops with thin sides) — render VIS and IR separately ----
-    y_clear_vis = np.asarray(clear.ASR_WL[::-1], dtype=float) / w_vis
-    y_clear_ir  = (-FACT_IR * np.asarray(clear.OLR_WL[::-1], dtype=float)) / w_ir
+                # Exact same stacking as original
+                net_case = np.append(case.ASR_WL[::-1], -fact_plot * case.OLR_WL[::-1])
+                case_trace = create_step_trace_original(
+                    all_wl_bounds, net_case/res_wl,
+                    label, color, show_sides=False
+                )
+                fig.add_trace(case_trace)
+            except Exception as e:
+                print(f"Error loading {fname}: {e}")
+                continue
 
-    for tr in _segment_trace(bnwlv, y_clear_vis,
-                             name="clear (no aerosol)", color="#f6a21a",
-                             show_sides=True, width=2, showlegend=True):
-        fig.add_trace(tr)
-    # Same legend label, but don't duplicate entry
-    for tr in _segment_trace(bnwli, y_clear_ir,
-                             name="clear (no aerosol)", color="#f6a21a",
-                             show_sides=True, width=2, showlegend=False):
-        fig.add_trace(tr)
+    except Exception as e:
+        print(f"Error loading reference: {e}")
+        return px.line(title="Could not load data")
 
-    # ---- selected cases (tops only) ----
-    palette = iter(["#17becf", "#d62728", "#9467bd", "#2ca02c", "#ff9896", "#8c564b"])
-    for fname in (cases or []):
-        try:
-            case = read_static_case(fname, round(float(tau_target), 3))
-        except Exception:
-            continue
-
-        y_vis = np.asarray(case.ASR_WL[::-1], dtype=float)
-        y_ir  = -FACT_IR * np.asarray(case.OLR_WL[::-1], dtype=float)
-
-        # Length guards (some files can be off-by-one)
-        nv = min(len(y_vis), len(w_vis))
-        ni = min(len(y_ir),  len(w_ir))
-        if nv < 1 and ni < 1:
-            continue
-
-        label = _pretty_label(fname)
-        color = next(palette, "#7f7f7f")
-
-        if nv > 0:
-            for tr in _segment_trace(bnwlv[:nv+1], (y_vis[:nv] / w_vis[:nv]),
-                                     name=label, color=color,
-                                     show_sides=False, width=2, showlegend=True):
-                fig.add_trace(tr)
-        if ni > 0:
-            # same legend label, no duplicate entry
-            for tr in _segment_trace(bnwli[:ni+1], (y_ir[:ni] / w_ir[:ni]),
-                                     name=label, color=color,
-                                     show_sides=False, width=2, showlegend=False):
-                fig.add_trace(tr)
-
-    # ---- axes & layout ----
-    xmin, xmax = 0.2, 60.0
-    fig.update_xaxes(type="log", range=[math.log10(xmin), math.log10(xmax)],
-                     title="Wavelength [μm]")
-    fig.update_yaxes(title=f"Irradiance [W/m²/μm] (×{int(FACT_IR)} scaled in IR)")
-
+    # Same layout as before
+    ticks = [0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1,1.5,2,3,4,5,6,7,8,9,10,12,14,16,20,25,30,40,50,60]
+    fig.update_xaxes(
+        type="log", range=[np.log10(0.2), np.log10(60.0)],
+        tickmode="array", tickvals=ticks, ticktext=[str(t) for t in ticks],
+        title="Wavelength [μm]", showgrid=True
+    )
+    fig.update_yaxes(
+        title=f"Irradiance [W/m²/μm] (×{fact_plot} scaled in IR)",
+        showgrid=True
+    )
     fig.update_layout(
         title=f"Radiative budget at the top of the atmosphere (τ = {float(tau_target):.2f})",
-        margin=dict(l=4, r=4, t=80, b=60),
-        legend=dict(orientation="h", x=0, y=-0.25, xanchor="left", yanchor="bottom"),
+        margin=dict(l=8, r=8, t=80, b=60),
+        legend=dict(orientation="h", x=0, y=-0.25, xanchor="left", yanchor="top"),
     )
 
-    if "_apply_dark_theme" in globals():
-        return _apply_dark_theme(fig)
-    return fig
-
+    return _apply_dark_theme(fig)
 
 def optical_props_figure(cases, tau_target: float):
     """Bottom plot: Extinction only, log-scale Y with safe handling of zeros and length mismatches."""
@@ -477,26 +508,26 @@ def optical_props_figure(cases, tau_target: float):
         return px.line(title="Select aerosols that have spectral data")
 
     fig = go.Figure()
-    palette = itertools.cycle(["#d62728", "#17becf", "#9467bd", "#2ca02c"])
     ymin, ymax = np.inf, -np.inf
 
     for name in cases:
         case = read_static_case(name, round(float(tau_target), 3))
 
+        base = _basename(name)                     # key for color
+        label = base.replace("_", " ") + " — extinction"
+        color = color_for(base)
+
         x = np.asarray(case.wl,   dtype=float)
         y = np.asarray(case.Qext, dtype=float)
 
-        # Align lengths defensively (some files can have off-by-one differences)
         n = int(min(len(x), len(y)))
         if n < 2:
             continue
         x, y = x[:n], y[:n]
 
-        # Sort by wavelength
         order = np.argsort(x)
         x, y = x[order], y[order]
 
-        # Log-safety: mask non-positive
         y_safe = y.copy()
         y_safe[y_safe <= 0] = np.nan
         if np.all(np.isnan(y_safe)):
@@ -505,10 +536,9 @@ def optical_props_figure(cases, tau_target: float):
         ymin = min(ymin, np.nanmin(y_safe))
         ymax = max(ymax, np.nanmax(y_safe))
 
-        color = next(palette)
         fig.add_trace(go.Scatter(
             x=x, y=y_safe, mode="lines",
-            name=f"{_pretty(name)} Extinction",
+            name=label,
             line=dict(color=color, width=2)
         ))
 
@@ -530,25 +560,36 @@ def optical_props_figure(cases, tau_target: float):
 
     return _apply_dark_theme(fig)
 
+
 def ts_vs_tau_figure(output_files):
     if not output_files:
         return px.line(title="Select aerosols that have temperature data (Ts vs τ)")
+
     frames = []
     for fname in output_files:
         df = read_tau_ts(fname)
         if not df.empty:
             frames.append(df)
+
     if not frames:
         return px.line(title="No temperature data")
+
     df = pd.concat(frames, ignore_index=True)
+
+    # color_discrete_map must be keyed by the 'series' values (which are base names)
+    series_keys = df["series"].dropna().unique().tolist()
+    color_map = {k: color_for(k) for k in series_keys}
+
     fig = px.line(
         df, x="tau", y="ts", color="series",
+        color_discrete_map=color_map,
         labels={"tau": "Visible opacity τ (670 nm)", "ts": "Surface temperature Ts [K]"},
         title="Ts vs τ"
     )
     fig.update_layout(margin=dict(l=0, r=0, t=60, b=0),
                       legend=dict(orientation="h", y=-0.25, yanchor="top", x=0, xanchor="left"))
     return _apply_dark_theme(fig)
+
 
 # ------- Build unified case list (no 'static'/'output' labels) -------
 STATIC_FILES = list_repo_files("static_")
@@ -557,6 +598,21 @@ OUTPUT_FILES = list_repo_files("output_")
 STATIC_MAP = { _basename(f): f for f in STATIC_FILES }
 OUTPUT_MAP = { _basename(f): f for f in OUTPUT_FILES }
 ALL_CASES  = sorted(set(STATIC_MAP) | set(OUTPUT_MAP))  # union
+BASES = sorted(ALL_CASES)
+
+# A long, stable palette; repeat if needed
+COLOR_POOL = (
+    px.colors.qualitative.Plotly
+    + px.colors.qualitative.D3
+    + px.colors.qualitative.Safe
+    + px.colors.qualitative.Set3
+)
+
+COLOR_BY_BASE = {base: COLOR_POOL[i % len(COLOR_POOL)] for i, base in enumerate(BASES)}
+
+def color_for(base_name: str) -> str:
+    """Return the stable color for a given base case (e.g., 'Al_8um_60um')."""
+    return COLOR_BY_BASE.get(base_name, "#7f7f7f")
 
 # ------- Layout (flexbox with resizable/collapsible sides) -------
 app = Dash(__name__)
