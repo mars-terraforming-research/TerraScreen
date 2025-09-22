@@ -9,6 +9,7 @@ import itertools
 from functools import lru_cache
 
 import numpy as np
+import io
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
@@ -89,6 +90,9 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 """
 
+DARK_BG = "#1f222a"
+DARK_FG = "#e6e6e6"
+
 # ------- HTTP (local Python or Pyodide) -------
 try:
     from pyodide.http import open_url  # browser
@@ -109,6 +113,19 @@ def fetch_text_cached(url: str) -> str:
 
 def fetch_json(url: str):
     return json.loads(fetch_text_cached(url))
+
+def _apply_dark_theme(fig):
+    fig.update_layout(
+        template="plotly_dark",
+        paper_bgcolor="rgba(0,0,0,0)",   # transparent paper -> page background shows
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(color=DARK_FG, family='Helvetica'),
+    )
+    # Optional: slightly subtler gridlines
+    fig.update_xaxes(gridcolor="rgba(255,255,255,0.08)")
+    fig.update_yaxes(gridcolor="rgba(255,255,255,0.08)")
+    return fig
+
 
 # ------- Repo config -------
 OWNER  = "mars-terraforming-research"
@@ -282,110 +299,239 @@ def read_static_case(file_name: str, tau_target_rounded: float) -> StaticCase:
                       bwni=bwni, bwnv=bwnv, solar_WN=solar_WN,
                       OLR_WL=OLR_WL, ASR_WL=ASR_WL)
 
-# ------- Band “tops” drawing helpers -------
-def _segments_from_bounds(bounds_um: np.ndarray, values: np.ndarray):
-    xs, ys = [], []
-    for left, right, v in zip(bounds_um[:-1], bounds_um[1:], values):
-        xs.extend([left, right, None])
-        ys.extend([v,    v,    None])
-    return xs, ys
+def read_output_from_content(file_content, tau_target=None):
+    '''
+    Modified version of terrascreen_lib.read_output() that works with string content
+    instead of file paths (for dashboard use with GitHub fetching)
+    '''
+    # Convert string content to file-like object
+    f = io.StringIO(file_content)
+    
+    # Rest is identical to original read_output function
+    Nlev = 24
+    L_NSPECTI = 96
+    L_NSPECTV = 84
+    
+    part_name = f.readline().split(',')[1]
+    Ncase = int(f.readline().split(',')[1])
+    dt = float(f.readline().split(',')[1])
+    Qext670 = float(f.readline().split(',')[1])
+    alb_sfc = float(f.readline().split(',')[1])
+    conrath_nu = float(f.readline().split(',')[1])
+    solar_flux = float(f.readline().split(',')[1])
+    bwni = np.array([float(x) for x in f.readline().split(',')[1:]])
+    bwnv = np.array([float(x) for x in f.readline().split(',')[1:]])
+    solar_WN = np.array([float(x) for x in f.readline().split(',')[1:]])
+    f.readline()  # skip ====
+    wl = np.array([float(x) for x in f.readline().split(',')[1:]])
+    Qext = np.array([float(x) for x in f.readline().split(',')[1:]])
+    Qscat = np.array([float(x) for x in f.readline().split(',')[1:]])
+    g = np.array([float(x) for x in f.readline().split(',')[1:]])
+    f.readline()  # skip ====
+    Pref = np.array([float(x) for x in f.readline().split(',')[1:]])
+    Tref = np.array([float(x) for x in f.readline().split(',')[1:]])
+    [f.readline() for _ in range(2)]  # skip 2 line
+    
+    # Read data arrays
+    T = np.zeros((Ncase, Nlev))
+    OLR_WL, SFC_dIR = [np.zeros((Ncase, L_NSPECTI)) for _ in range(2)]
+    ASR_WL, SFC_dVIS = [np.zeros((Ncase, L_NSPECTV)) for _ in range(2)]
+    tau, ts, net_top, net_bot, alb, OLR, ASR = [np.zeros((Ncase)) for _ in range(7)]
+    
+    for i in range(Ncase):
+        vals = np.array([float(x) for x in f.readline().split(',')])
+        tau[i] = vals[1]
+        ts[i] = vals[2]
+        alb[i] = vals[3]
+        OLR[i] = vals[4]
+        ASR[i] = vals[5]
+        net_top[i] = vals[6]
+        net_bot[i] = vals[7]
+        T[i, :] = vals[8:8+Nlev]
+        OLR_WL[i, :] = vals[9+Nlev:9+Nlev+L_NSPECTI]
+        ASR_WL[i, :] = vals[9+Nlev+L_NSPECTI:9+Nlev+L_NSPECTI+L_NSPECTV]
+        SFC_dIR[i, :] = vals[9+Nlev+L_NSPECTI+L_NSPECTV:9+Nlev+2*L_NSPECTI+L_NSPECTV]
+        SFC_dVIS[i, :] = vals[9+Nlev+2*L_NSPECTI+L_NSPECTV:]
+    f.close()
 
-def _vertical_sides(bounds_um: np.ndarray, values: np.ndarray):
-    xs, ys = [], []
-    for left, right, v in zip(bounds_um[:-1], bounds_um[1:], values):
-        xs.extend([left, left, None,  right, right, None])
-        ys.extend([0,    v,    None,  0,     v,     None])
-    return xs, ys
+    # Compute center wavenumber
+    res_wn_bwni = bwni[1:] - bwni[0:-1]
+    center_wn_bwni = bwni[0:-1] + res_wn_bwni/2
+    res_wn_bwnv = bwnv[1:] - bwnv[0:-1]
+    center_wn_bwnv = bwnv[0:-1] + res_wn_bwnv/2
+    
+    # Initialize model
+    class model(object):
+        pass
+    MOD = model()
+    
+    # Save all the static variables
+    setattr(MOD, 'name', 'from_content')
+    setattr(MOD, 'Qext670', Qext670)
+    setattr(MOD, 'alb_sfc', alb_sfc)
+    setattr(MOD, 'conrath_nu', conrath_nu)
+    setattr(MOD, 'solar_flux', solar_flux)
+    setattr(MOD, 'bwni', bwni)
+    setattr(MOD, 'bwnv', bwnv)
+    setattr(MOD, 'solar_WN', solar_WN)
+    setattr(MOD, 'wni', center_wn_bwni)
+    setattr(MOD, 'wnv', center_wn_bwnv)
+    setattr(MOD, 'wli', 10**4/center_wn_bwni)
+    setattr(MOD, 'wlv', 10**4/center_wn_bwnv)
+    setattr(MOD, 'Qext', Qext)
+    setattr(MOD, 'Qscat', Qscat)
+    setattr(MOD, 'g', g)
+    setattr(MOD, 'wl', wl)
+    setattr(MOD, 'Tref', Tref)
+    setattr(MOD, 'Pref', Pref)
 
-def _add_bandline(fig, bounds_um, per_um, *, name, color=None, width=2.0, sides=False, side_width=0.5):
-    x, y = _segments_from_bounds(bounds_um, per_um)
-    fig.add_trace(go.Scatter(
-        name=name, x=x, y=y, mode="lines",
-        line=dict(width=width, color=color),
-        hovertemplate="λ band<extra>"+name+"</extra>"
-    ))
-    if sides:
-        xs, ys = _vertical_sides(bounds_um, per_um)
-        fig.add_trace(go.Scatter(
-            name=name+" (bands)", showlegend=False,
-            x=xs, y=ys, mode="lines",
-            line=dict(width=side_width, color=color),
-            hoverinfo="skip"
-        ))
+    # Save variables
+    var_list = ['tau', 'ts', 'alb', 'OLR', 'ASR', 'net_top', 'net_bot', 'OLR_WL', 'ASR_WL', 'SFC_dIR', 'SFC_dVIS', 'T']
+    for ivar in var_list:
+        if tau_target is None:
+            setattr(MOD, ivar, eval(ivar))
+        else:
+            itau = np.argmin(np.abs(tau - tau_target))
+            setattr(MOD, ivar, eval('%s[%i,...]' % (ivar, itau)))
+    return MOD
 
-# ------- Figures -------
-def spectral_budget_figure(static_files, tau_target: float):
-    if not static_files:
-        return px.line(title="Select one or more cases that have spectral data")
+def create_step_trace_original(bounds_wn, var, name, color, show_sides=True):
+    """
+    Exact copy of the working step trace function from original code.
+    This creates the proper wavelength bins using center +/- half-width method.
+    """
+    x_vals, y_vals = [], []
+    
+    res_wn = bounds_wn[1:] - bounds_wn[:-1]
+    center_wn = bounds_wn[:-1] + res_wn/2
+    
+    for i, val in enumerate(var):
+        left = center_wn[i] - res_wn[i]/2
+        right = center_wn[i] + res_wn[i]/2
+        
+        if show_sides:
+            x_vals.extend([left, left, right, right])
+            y_vals.extend([0, val, val, 0])
+        else:
+            x_vals.extend([left, right])
+            y_vals.extend([val, val])
+        
+        if i < len(var) - 1:
+            x_vals.append(None)  # Break line
+            y_vals.append(None)
+    
+    return go.Scatter(x=x_vals, y=y_vals, name=name, 
+                     line=dict(color=color, width=2), mode='lines',
+                     hovertemplate="λ: %{x:.4g} μm<br>Value: %{y:.4g}<extra>"+name+"</extra>",
+                     connectgaps=False)
 
-    clear = read_static_case(static_files[0], round(0.0, 3))
-
-    bnwlv = 1e4 / clear.bwnv[::-1]            # VIS edges
-    bnwli = 1e4 / clear.bwni[::-1]            # IR edges
-    all_bounds = np.append(bnwlv, bnwli[1:])
-    res_wl     = np.diff(all_bounds)
-
+def spectral_budget_figure(cases, tau_target: float):
+    """
+    CORRECTED VERSION - Uses read_output logic with dashboard fetching.
+    This should eliminate all artifacts by using the exact same data parsing
+    and plotting approach as the working original code.
+    
+    REPLACE your existing spectral_budget_figure function with this one.
+    """
+    fact_plot = 20  # IR scaling factor (matches original)
     fig = go.Figure()
 
-    # Optional solar VIS (per band)
-    if (clear.solar_WN is not None) and (len(clear.solar_WN) >= L_NSPECTV):
-        res_wl_vis = np.diff(bnwlv)
-        solar_per_um = clear.solar_WN[::-1] / res_wl_vis
-        _add_bandline(fig, bnwlv, solar_per_um, name="solar flux",
-                      color="black", width=2.2, sides=False)
+    try:
+        # Fetch and parse clear reference case using read_output logic
+        clear_content = fetch_text_cached(RAW_BASE + "static_dust1.5.txt")
+        clear = read_output_from_content(clear_content, 0.)
+        
+        # EXACT same wavelength calculation as working original
+        bnwlv = 10**4 / clear.bwnv[::-1]
+        bnwli = 10**4 / clear.bwni[::-1] 
+        all_wl_bounds = np.append(bnwlv, bnwli[1:])
+        res_wl = all_wl_bounds[1:] - all_wl_bounds[:-1]
+        res_wl_vis = bnwlv[1:] - bnwlv[:-1]
 
-    # Clear (no aerosol), IR scaled by fixed constant
-    net_clear = np.append(clear.ASR_WL[::-1], -IR_SCALE * clear.OLR_WL[::-1])
-    clear_per_um = net_clear / res_wl
-    _add_bandline(fig, all_bounds, clear_per_um, name="clear (no aerosol)",
-                  color="orange", width=2.0, sides=True, side_width=0.7)
+        # Solar spectrum (exact same as original)
+        if hasattr(clear, 'solar_WN') and clear.solar_WN is not None and len(clear.solar_WN):
+            solar_trace = create_step_trace_original(
+                bnwlv, clear.solar_WN[::-1]/res_wl_vis, 
+                'solar flux', '#ffffff', show_sides=False
+            )
+            fig.add_trace(solar_trace)
 
-    # Selected static files at τ
-    palette = itertools.cycle(["#17becf", "#d62728", "#9467bd", "#2ca02c"])
-    for fname in static_files:
-        case = read_static_case(fname, round(float(tau_target), 3))
-        net_stack = np.append(case.ASR_WL[::-1], -IR_SCALE * case.OLR_WL[::-1])
-        per_um    = net_stack / res_wl
-        _add_bandline(fig, all_bounds, per_um, name=_pretty(fname),
-                      color=next(palette), width=2.0, sides=False)
+        # Clear reference (exact same as original)
+        net_clear = np.append(clear.ASR_WL[::-1], -fact_plot * clear.OLR_WL[::-1])
+        clear_trace = create_step_trace_original(
+            all_wl_bounds, net_clear/res_wl,
+            'clear (no aerosol)', '#f6a21a', show_sides=True
+        )
+        fig.add_trace(clear_trace)
 
-    fig.update_layout(
-        title=f"Radiative budget at the top of the atmosphere (τ={tau_target:g}; IR scaled ×{IR_SCALE})",
-        margin=dict(l=4, r=4, t=80, b=90),
-        legend=dict(orientation="h", y=-0.25, yanchor="top", x=0, xanchor="left"),
-        xaxis_title="Wavelength [μm]",
-        yaxis_title=f"Irradiance [W/m²/μm]"
+        # Selected cases - use same read_output logic
+        for fname in (cases or []):
+            try:
+                case_content = fetch_text_cached(RAW_BASE + fname)
+                case = read_output_from_content(case_content, tau_target)
+                label = _basename(fname).replace("_", " ")
+                color = color_for(_basename(fname))
+
+                # Exact same stacking as original
+                net_case = np.append(case.ASR_WL[::-1], -fact_plot * case.OLR_WL[::-1])
+                case_trace = create_step_trace_original(
+                    all_wl_bounds, net_case/res_wl,
+                    label, color, show_sides=False
+                )
+                fig.add_trace(case_trace)
+            except Exception as e:
+                print(f"Error loading {fname}: {e}")
+                continue
+
+    except Exception as e:
+        print(f"Error loading reference: {e}")
+        return px.line(title="Could not load data")
+
+    # Same layout as before
+    ticks = [0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1,1.5,2,3,4,5,6,7,8,9,10,12,14,16,20,25,30,40,50,60]
+    fig.update_xaxes(
+        type="log", range=[np.log10(0.2), np.log10(60.0)],
+        tickmode="array", tickvals=ticks, ticktext=[str(t) for t in ticks],
+        title="Wavelength [μm]", showgrid=True
     )
-    fig.update_xaxes(type="log", range=[math.log10(0.2), math.log10(60.0)], ticks="outside")
-    fig.update_yaxes(zeroline=True)
-    return fig
+    fig.update_yaxes(
+        title=f"Irradiance [W/m²/μm] (×{fact_plot} scaled in IR)",
+        showgrid=True
+    )
+    fig.update_layout(
+        title=f"Radiative budget at the top of the atmosphere (τ = {float(tau_target):.2f})",
+        margin=dict(l=8, r=8, t=80, b=60),
+        legend=dict(orientation="h", x=0, y=-0.25, xanchor="left", yanchor="top"),
+    )
+
+    return _apply_dark_theme(fig)
 
 def optical_props_figure(cases, tau_target: float):
     """Bottom plot: Extinction only, log-scale Y with safe handling of zeros and length mismatches."""
     if not cases:
-        return px.line(title="Select cases that have spectral data")
+        return px.line(title="Select aerosols that have spectral data")
 
     fig = go.Figure()
-    palette = itertools.cycle(["#d62728", "#17becf", "#9467bd", "#2ca02c"])
     ymin, ymax = np.inf, -np.inf
 
     for name in cases:
         case = read_static_case(name, round(float(tau_target), 3))
 
+        base = _basename(name)                     # key for color
+        label = base.replace("_", " ") + " — extinction"
+        color = color_for(base)
+
         x = np.asarray(case.wl,   dtype=float)
         y = np.asarray(case.Qext, dtype=float)
 
-        # Align lengths defensively (some files can have off-by-one differences)
         n = int(min(len(x), len(y)))
         if n < 2:
             continue
         x, y = x[:n], y[:n]
 
-        # Sort by wavelength
         order = np.argsort(x)
         x, y = x[order], y[order]
 
-        # Log-safety: mask non-positive
         y_safe = y.copy()
         y_safe[y_safe <= 0] = np.nan
         if np.all(np.isnan(y_safe)):
@@ -394,10 +540,9 @@ def optical_props_figure(cases, tau_target: float):
         ymin = min(ymin, np.nanmin(y_safe))
         ymax = max(ymax, np.nanmax(y_safe))
 
-        color = next(palette)
         fig.add_trace(go.Scatter(
             x=x, y=y_safe, mode="lines",
-            name=f"{_pretty(name)} Extinction",
+            name=label,
             line=dict(color=color, width=2)
         ))
 
@@ -417,27 +562,38 @@ def optical_props_figure(cases, tau_target: float):
     fig.update_xaxes(type="log", range=[math.log10(0.2), math.log10(60.0)])
     fig.update_yaxes(type="log", range=[math.log10(lo), math.log10(hi)])
 
-    return fig
+    return _apply_dark_theme(fig)
+
 
 def ts_vs_tau_figure(output_files):
     if not output_files:
-        return px.line(title="Select cases that have temperature data (Ts vs τ)")
+        return px.line(title="Select aerosols that have temperature data (Ts vs τ)")
+
     frames = []
     for fname in output_files:
         df = read_tau_ts(fname)
         if not df.empty:
             frames.append(df)
+
     if not frames:
         return px.line(title="No temperature data")
+
     df = pd.concat(frames, ignore_index=True)
+
+    # color_discrete_map must be keyed by the 'series' values (which are base names)
+    series_keys = df["series"].dropna().unique().tolist()
+    color_map = {k: color_for(k) for k in series_keys}
+
     fig = px.line(
         df, x="tau", y="ts", color="series",
+        color_discrete_map=color_map,
         labels={"tau": "Visible opacity τ (670 nm)", "ts": "Surface temperature Ts [K]"},
         title="Ts vs τ"
     )
     fig.update_layout(margin=dict(l=0, r=0, t=60, b=0),
                       legend=dict(orientation="h", y=-0.25, yanchor="top", x=0, xanchor="left"))
-    return fig
+    return _apply_dark_theme(fig)
+
 
 # ------- Build unified case list (no 'static'/'output' labels) -------
 STATIC_FILES = list_repo_files("static_")
@@ -446,42 +602,46 @@ OUTPUT_FILES = list_repo_files("output_")
 STATIC_MAP = { _basename(f): f for f in STATIC_FILES }
 OUTPUT_MAP = { _basename(f): f for f in OUTPUT_FILES }
 ALL_CASES  = sorted(set(STATIC_MAP) | set(OUTPUT_MAP))  # union
+BASES = sorted(ALL_CASES)
+
+# A long, stable palette; repeat if needed
+COLOR_POOL = (
+    px.colors.qualitative.Plotly
+    + px.colors.qualitative.D3
+    + px.colors.qualitative.Safe
+    + px.colors.qualitative.Set3
+)
+
+COLOR_BY_BASE = {base: COLOR_POOL[i % len(COLOR_POOL)] for i, base in enumerate(BASES)}
+
+def color_for(base_name: str) -> str:
+    """Return the stable color for a given base case (e.g., 'Al_8um_60um')."""
+    return COLOR_BY_BASE.get(base_name, "#7f7f7f")
 
 # ------- Layout (flexbox with resizable/collapsible sides) -------
 app = Dash(__name__)
 
+# Wrap everything in a dark container
 app.layout = html.Div(
     [
-        # ------ Controls block (multi-column checklist + constrained slider) ------
         html.Div(
             [
-                html.H3("TerraScreen dashboard", style={"margin": "0 0 0.5rem 0"}),
-
-                html.H4("Cases", style={"margin": "0.5rem 0 0.25rem 0"}),
-
-                # Checklist arranged into responsive "columns" by wrapping labels
+                html.H2("TerraScreen Dashboard", style={"margin": "0 0 0.5rem 0"}),
+                html.H4("Candidate Particles", style={"margin": "0.5rem 0 0.25rem 0"}),
                 dcc.Checklist(
                     id="cases",
                     options=[{"label": name, "value": name} for name in ALL_CASES],
                     value=ALL_CASES[:2] if ALL_CASES else [],
-                    # Make the label elements flow like tiles so they wrap into columns
                     style={
                         "display": "flex",
                         "flexWrap": "wrap",
                         "gap": "0.35rem 1.25rem",
                         "rowGap": "0.4rem",
-                        # limit overall width so items form 3–5 columns depending on viewport
                         "maxWidth": "1200px",
                     },
-                    # One style applied to every option label; fixed width makes columns
-                    labelStyle={
-                        "display": "inline-block",
-                        "width": "230px",   # tweak: smaller -> more columns
-                        "margin": "0",
-                    },
+                    labelStyle={"display": "inline-block", "width": "230px", "margin": "0"},
                     inputStyle={"marginRight": "0.5rem"},
                 ),
-
                 html.Div(
                     [
                         html.Label("τ (for spectral plots)", style={"display": "block", "marginTop": "0.75rem"}),
@@ -494,58 +654,53 @@ app.layout = html.Div(
                             marks={0: "0", 0.5: "0.5", 1: "1", 2: "2"},
                         ),
                     ],
-                    # Constrain slider width so it doesn't look silly on very wide pages
-                    style={
-                        "maxWidth": "480px",
-                        "margin": "0.25rem 0 0.25rem 0",
-                    },
+                    style={"maxWidth": "480px", "margin": "0.25rem 0 0.25rem 0"},
                 ),
-
-                html.Div(id="status", style={"marginTop": "0.5rem", "fontSize": "0.9rem", "color": "#666"}),
-                html.Hr(style={"margin": "1rem 0 0.75rem 0"}),
+                html.Div(id="status", style={"marginTop": "0.5rem", "fontSize": "0.9rem", "color": "#B8BDC9"}),
+                html.Hr(style={"margin": "1rem 0 0.75rem 0", "borderColor": "#2a2f3a"}),
             ],
-            # Center controls and give them breathing room
-            style={
-                "padding": "1rem",
-                "margin": "0 auto",
-                "maxWidth": "1400px",  # keeps the controls from stretching edge-to-edge
-                "boxSizing": "border-box",
-            },
+            style={"padding": "1rem", "margin": "0 auto", "maxWidth": "1400px", "boxSizing": "border-box"},
         ),
 
-        # ------ Plots (stacked vertically; each centered and width-limited) ------
         html.Div(
             [
                 dcc.Graph(
                     id="spectral_budget",
-                    style={
-                        "height": "52vh",
-                        "margin": "0 auto 1rem auto",
-                        "maxWidth": "1400px",
-                    },
+                    style={"height": "52vh", "margin": "0 auto 1rem auto", "maxWidth": "1400px"},
                 ),
                 dcc.Graph(
                     id="optical_props",
-                    style={
-                        "height": "45vh",
-                        "margin": "0 auto 1rem auto",
-                        "maxWidth": "1400px",
-                    },
+                    style={"height": "45vh", "margin": "0 auto 1rem auto", "maxWidth": "1400px"},
                 ),
                 dcc.Graph(
                     id="ts_vs_tau",
-                    style={
-                        "height": "60vh",
-                        "margin": "0 auto 1rem auto",
-                        "maxWidth": "1400px",
-                    },
+                    style={"height": "60vh", "margin": "0 auto 1rem auto", "maxWidth": "1400px"},
                 ),
             ],
             style={"padding": "0 1rem 1rem", "boxSizing": "border-box"},
         ),
+
+        # ----- Top-right image overlay (non-clickable, tooltip attribution) -----
+        html.Img(
+            src="assets/terraformed_mars.png", 
+            alt="Terraformed Mars (illustration)",
+            title="Image credit: Science.org — 'Terraforming Mars could be easier than scientists thought'",
+            style={
+                "position": "fixed",
+                "top": "24px",
+                "right": "36px",
+                "width": "180px",    
+                "height": "auto",
+                "opacity": "0.85",
+                "borderRadius": "8px",
+                # "boxShadow": "0 2px 12px rgba(0,0,0,0.6)",
+                "zIndex": 1000,
+                "pointerEvents": "auto",   # allow hover tooltip
+            },
+        ),
     ],
-    # Give the whole page a comfortable width and prevent horizontal scrollbars
-    style={"maxWidth": "100%", "overflowX": "hidden"},
+    # Dark page background + default text color
+    style={"backgroundColor": DARK_BG, "color": DARK_FG, "minHeight": "100vh", "maxWidth": "100%", "overflowX": "hidden", "fontFamily": "Helvetica"},
 )
 
 # ------- Callbacks -------
