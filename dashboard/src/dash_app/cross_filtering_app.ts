@@ -506,8 +506,11 @@ def spectral_budget_figure(cases, tau_target: float):
 
     return _apply_dark_theme(fig)
 
-def optical_props_figure(cases, tau_target: float):
-    """Bottom plot: Extinction only, log-scale Y with safe handling of zeros and length mismatches."""
+def optical_props_figure(cases, tau_target: float, show_scattering: bool):
+    """
+    Bottom plot: Extinction (solid) and optional scattering (dashed),
+    log-scale Y with safe handling of zeros and length mismatches.
+    """
     if not cases:
         return px.line(title="Select aerosols that have spectral data")
 
@@ -517,47 +520,70 @@ def optical_props_figure(cases, tau_target: float):
     for name in cases:
         case = read_static_case(name, round(float(tau_target), 3))
 
-        base = _basename(name)                     # key for color
-        label = base.replace("_", " ") + " — extinction"
+        base = _basename(name)  # key for color and legend group
         color = color_for(base)
 
+        # Ensure arrays are consistent and sorted by wavelength
         x = np.asarray(case.wl,   dtype=float)
-        y = np.asarray(case.Qext, dtype=float)
+        y_ext = np.asarray(case.Qext, dtype=float)
+        y_scat = np.asarray(case.Qscat, dtype=float)
 
-        n = int(min(len(x), len(y)))
+        n = int(min(len(x), len(y_ext), len(y_scat)))
         if n < 2:
             continue
-        x, y = x[:n], y[:n]
+        x, y_ext, y_scat = x[:n], y_ext[:n], y_scat[:n]
 
         order = np.argsort(x)
-        x, y = x[order], y[order]
+        x, y_ext, y_scat = x[order], y_ext[order], y_scat[order]
 
-        y_safe = y.copy()
-        y_safe[y_safe <= 0] = np.nan
-        if np.all(np.isnan(y_safe)):
+        # Safe values for log scale
+        y_ext_safe = y_ext.copy()
+        y_ext_safe[y_ext_safe <= 0] = np.nan
+
+        y_scat_safe = y_scat.copy()
+        y_scat_safe[y_scat_safe <= 0] = np.nan
+
+        # Skip if no positive values
+        if np.all(np.isnan(y_ext_safe)) and (not show_scattering or np.all(np.isnan(y_scat_safe))):
             continue
 
-        ymin = min(ymin, np.nanmin(y_safe))
-        ymax = max(ymax, np.nanmax(y_safe))
+        # Update y-range based on what we will plot
+        if np.any(~np.isnan(y_ext_safe)):
+            ymin = min(ymin, np.nanmin(y_ext_safe))
+            ymax = max(ymax, np.nanmax(y_ext_safe))
+        if show_scattering and np.any(~np.isnan(y_scat_safe)):
+            ymin = min(ymin, np.nanmin(y_scat_safe))
+            ymax = max(ymax, np.nanmax(y_scat_safe))
 
+        # Extinction (solid)
         fig.add_trace(go.Scatter(
-            x=x, y=y_safe, mode="lines",
-            name=label,
-            line=dict(color=color, width=2)
+            x=x, y=y_ext_safe, mode="lines",
+            name=base.replace("_", " ") + " — extinction",
+            line=dict(color=color, width=2, dash="solid"),
+            legendgroup=base,
         ))
 
+        # Scattering (dashed) - optional
+        if show_scattering and np.any(~np.isnan(y_scat_safe)):
+            fig.add_trace(go.Scatter(
+                x=x, y=y_scat_safe, mode="lines",
+                name=base.replace("_", " ") + " — scattering",
+                line=dict(color=color, width=2, dash="dash"),
+                legendgroup=base,
+            ))
+
     if not np.isfinite(ymin) or not np.isfinite(ymax):
-        return px.line(title="No positive extinction values to plot on log scale")
+        return px.line(title="No positive values to plot on log scale")
 
     lo = max(ymin / 1.5, 1e-6)
     hi = ymax * 1.5
 
     fig.update_layout(
-        title="Optical properties for the aerosols considered (Extinction only)",
+        title="Optical properties for the aerosols considered (Extinction & Scattering)",
         margin=dict(l=4, r=4, t=80, b=80),
         legend=dict(orientation="h", y=-0.25, yanchor="top", x=0, xanchor="left"),
         xaxis_title="Wavelength [μm]",
-        yaxis_title="Extinction Efficiency",
+        yaxis_title="Efficiency",
     )
     fig.update_xaxes(type="log", range=[math.log10(0.2), math.log10(60.0)])
     fig.update_yaxes(type="log", range=[math.log10(lo), math.log10(hi)])
@@ -656,6 +682,17 @@ app.layout = html.Div(
                     ],
                     style={"maxWidth": "480px", "margin": "0.25rem 0 0.25rem 0"},
                 ),
+                html.Div(
+                    [
+                        dcc.Checklist(
+                            id="scattering_toggle",
+                            options=[{"label": "Show scattering (dashed)", "value": "scat"}],
+                            value=["scat"],  # default ON; set [] if you prefer OFF by default
+                            style={"marginTop": "0.5rem"},
+                        ),
+                    ],
+                    style={"maxWidth": "480px", "margin": "0.25rem 0 0.25rem 0"},
+                ),
                 html.Div(id="status", style={"marginTop": "0.5rem", "fontSize": "0.9rem", "color": "#B8BDC9"}),
                 html.Hr(style={"margin": "1rem 0 0.75rem 0", "borderColor": "#2a2f3a"}),
             ],
@@ -711,14 +748,17 @@ app.layout = html.Div(
     Output("status","children"),
     Input("cases","value"),
     Input("tau_target","value"),
+    Input("scattering_toggle","value"),
 )
-def render(cases_selected, tau_target):
+def render(cases_selected, tau_target, scattering_toggle):
     bases = cases_selected or []
     static_files = [STATIC_MAP[b] for b in bases if b in STATIC_MAP]
     output_files = [OUTPUT_MAP[b] for b in bases if b in OUTPUT_MAP]
 
+    show_scattering = "scat" in (scattering_toggle or [])
+
     fig_spec = spectral_budget_figure(static_files, float(tau_target))
-    fig_opt  = optical_props_figure(static_files, float(tau_target))
+    fig_opt  = optical_props_figure(static_files, float(tau_target), show_scattering)
     fig_ts   = ts_vs_tau_figure(output_files)
     status   = f"{len(bases)} case(s) • spectral={len(static_files)} • temperature={len(output_files)}"
     return fig_spec, fig_opt, fig_ts, status

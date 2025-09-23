@@ -3,7 +3,8 @@ def read_output(filename,tau_target=None):
     '''
     Unpack radiation driver
     '''
-    fname='/home/akling/Code/TerraScreen/output/'+filename
+    # fname='/home/akling/Code/TerraScreen/output/'+filename
+    fname = filename
     #===Read header===
     Nlev=24
     L_NSPECTI=96
