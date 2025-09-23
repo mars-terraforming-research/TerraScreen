@@ -3,7 +3,7 @@ Particle Screening Tool for Mars TerraForming
 
 The particle screening tool is a radiative transfer code suitable to simulate representative Martian atmospheric and surface temperature in the presence of natural or engineered aerosols. Instructions are provided below to compile and run the code. 
 
-Also check-out the TerraScreen's dashboard for a summary of the results [mars-terraforming-research.github.io/TerraScreen](https://mars-terraforming-research.github.io/TerraScreen)
+Results for several aerosol designs are provided through TerraScreen's dashboard: [mars-terraforming-research.github.io/TerraScreen](https://mars-terraforming-research.github.io/TerraScreen)
 
 # Quick start guide
 
