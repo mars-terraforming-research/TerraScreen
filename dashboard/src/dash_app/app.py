@@ -581,7 +581,13 @@ def optical_props_figure(cases, tau_target: float, show_scattering: bool):
         xaxis_title="Wavelength [μm]",
         yaxis_title="Efficiency",
     )
-    fig.update_xaxes(type="log", range=[math.log10(0.2), math.log10(60.0)])
+    ticks = [0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1,1.5,2,3,4,5,6,7,8,9,10,12,14,16,20,25,30,40,50,60]
+    fig.update_xaxes(
+        type="log", range=[np.log10(0.2), np.log10(60.0)],
+        tickmode="array", tickvals=ticks, ticktext=[str(t) for t in ticks],
+        title="Wavelength [μm]", showgrid=True
+    )
+    # fig.update_xaxes(type="log", range=[math.log10(0.2), math.log10(60.0)])
     fig.update_yaxes(type="log", range=[math.log10(lo), math.log10(hi)])
 
     return _apply_dark_theme(fig)
