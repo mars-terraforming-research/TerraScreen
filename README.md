@@ -133,6 +133,32 @@ Notes:
 ## Requirements
 This code  requires a Fortran compiler (e.g. gfortran). Some optional pre-processing and analysis scripts are provided in Python.
 
+## Pre-processing and post-processing
+
+TerraScreen is set-up so both the input (optical tables) and the output are written in a easy to manipulate, human-readable .txt format.
+
+To faciliate the pre-processing, we provide in the `\app` directory the `optical_table_binning.py` Python script that can be easily adapted to bin the Q_ext, Q_scat and g-factor at arbitrary *wavelength* resolution into the *wavenumber bins* used by the TerraScreen.
+
+To faciliate the post-processing, we provide a Python parser in `\app\terrascreen_lib.py` that will load all the variables from the `output_XXXX.txt` or `static_XXXX.txt` as attributes in a single Python object (e.g. `object.variables`) By default the parser will load the data from `N` opacity runs.  
+* A typical application for the `output_XXXX.txt` is to plot the equilibrated surface temperature as a function of the opacity: 
+
+```
+from terrascreen_lib import read_output
+#Load all opacities cases
+part=read_output('output_XXXX.txt')
+plot(part.tau,part.ts) 
+```
+* A typical application for the `static_XXXX.txt` is to extract a single opacity by providing an additional argument to read_output() (e.g `tau =0.5`) and plot the OLR as a function of wavenumber:
+
+```
+from terrascreen_lib import read_output
+#Load all opacities cases
+part1=read_output('static_XXXX.txt',0.5)
+plot(part.wni,part2.OLR_WL)
+```
+
+After calling `part=read_output()` all the variables in memory can be listed with `print(part.__dict__.keys())` and easily matched to the  human-readable output files.
+
 ## Credits
 This project is based on the [NASA Ames Legacy GCM radiation code](https://github.com/nasa/legacy-mars-global-climate-model). This is an initial commit. Further update of the branch will be provided as patch to the NASA Ames Legacy GCM radiation code to properly credit the authors.  
 
