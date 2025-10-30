@@ -148,16 +148,16 @@ from terrascreen_lib import read_output
 part=read_output('output_XXXX.txt')
 plot(part.tau,part.ts) 
 ```
-* A typical application for the `static_XXXX.txt` is to extract a single opacity by providing an additional argument to read_output() (e.g `tau =0.5`) and plot the OLR as a function of wavenumber:
+* A typical application for the `static_XXXX.txt` is to extract a single opacity by providing an additional argument (e.g. `tau =0.5`) to `read_output()` and plot the OLR as a function of wavenumber:
 
 ```
 from terrascreen_lib import read_output
-#Load all opacities cases
-part1=read_output('static_XXXX.txt',0.5)
+#Load a single opacity case
+part=read_output('static_XXXX.txt',0.5)
 plot(part.wni,part2.OLR_WL)
 ```
 
-After calling `part=read_output()` all the variables in memory can be listed with `print(part.__dict__.keys())` and easily matched to the  human-readable output files.
+After calling `part=read_output()` all the variables in memory can be listed with `print(part.__dict__.keys())` and easily matched to the human-readable output files and description above.
 
 ## Credits
 This project is based on the [NASA Ames Legacy GCM radiation code](https://github.com/nasa/legacy-mars-global-climate-model). This is an initial commit. Further update of the branch will be provided as patch to the NASA Ames Legacy GCM radiation code to properly credit the authors.  
