@@ -716,10 +716,10 @@ c        call cldprofile(psf,ptrop,nlev,sigma,pcld,tautotcld,taurefcld)
          write(69,'(a,200(a,f10.4))')'Temp initial[K]',
      * (",",tlev(2*L),L=2,L_NLAYRAD)
         write(69,'(a)')'================'
-        write(69,'(a,a,a,a,a,a,a,a,400(a,I0.2))')'it   ,',
+        write(69,'(a,a,a,a,a,a,a,a,a,a,400(a,I0.2))')'it   ,',
      *'   tau    ,',
      *'  Tsfc    ,','   alb    ,','   OLR    ,','    ASR   ,',
-     *'  NET top ,','  NET bot ',
+     *' dnVIS_sfc,',' dnIR_sfc ,','  NET top ,','  NET bot ', 
      *(", T lev  ",L,L=1,L_NLAYRAD),
      *(",  OLR IR",i,i=1,L_NSPECTI),(', ASR VIS',j,j=1,L_NSPECTV),
      *(", SFC DIR",i,i=1,L_NSPECTI),(',SFC DVIS',j,j=1,L_NSPECTV)
@@ -729,9 +729,10 @@ c        call cldprofile(psf,ptrop,nlev,sigma,pcld,tautotcld,taurefcld)
 !tau, gts, alb,OLR,ASR,NET_top,NET_down     
 !       On all passes, write total heating rates 
 
-      write(69,'(I05,400(a,f10.4))')it,',',
+      write(69,'(I05,402(a,f10.4))')it,',',
      * TAUTOT,',',gtd,',',fluxupv(1)/fluxdnv(1),',',
-     * fluxupi(1),',',fluxdnv(1)-fluxupv(1),',',net_top,',',net_bot,
+     * fluxupi(1),',',fluxdnv(1)-fluxupv(1),',',fluxdnv(L_NLAYRAD),',',
+     * fluxdni(L_NLAYRAD),',',net_top,',',net_bot,
      * (",",tl(2*L),L=1,L_NLAYRAD),
      * (",",upfluxi_wl(i,1),i=1,L_NSPECTI),
      * (",",dnfluxv_wl(j,1)-upfluxv_wl(j,1),j=1,L_NSPECTV),
