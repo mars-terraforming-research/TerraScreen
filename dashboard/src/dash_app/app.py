@@ -285,7 +285,9 @@ def read_static_case(file_name: str, tau_target_rounded: float) -> StaticCase:
     itau = int(np.argmin(np.abs(taus - tau_target_rounded)))
     vals = rows[itau]
 
-    base = 10  # 8 original scalars + 2 new (dnVIS_sfc, dnIR_sfc)
+    # Auto-detect format: 10 scalars if dnVIS_sfc/dnIR_sfc present, else 8
+    has_dn = "dnvis_sfc" in lines[idx_hdr].lower()
+    base = 10 if has_dn else 8
     p = base + NLEV
     OLR_WL = np.array(vals[p:p+L_NSPECTI]);  p += L_NSPECTI
     ASR_WL = np.array(vals[p:p+L_NSPECTV])
@@ -326,13 +328,19 @@ def read_output_from_content(file_content, tau_target=None):
     f.readline()  # skip ====
     Pref = np.array([float(x) for x in f.readline().split(',')[1:]])
     Tref = np.array([float(x) for x in f.readline().split(',')[1:]])
-    [f.readline() for _ in range(2)]  # skip 2 line
-    
+    f.readline()  # skip ====
+
     # Read data arrays
     T = np.zeros((Ncase, Nlev))
     OLR_WL, SFC_dIR = [np.zeros((Ncase, L_NSPECTI)) for _ in range(2)]
     ASR_WL, SFC_dVIS = [np.zeros((Ncase, L_NSPECTV)) for _ in range(2)]
     tau, ts, net_top, net_bot, alb, OLR, ASR, dnVIS_sfc, dnIR_sfc = [np.zeros((Ncase)) for _ in range(9)]
+
+    # Auto-detect format from header line: check for dnVIS_sfc column
+    hdr_line = f.readline()  # this is the "it, tau, ..." header
+    has_dn = "dnvis_sfc" in hdr_line.lower()
+    # Offsets: new format has 2 extra scalars (dnVIS_sfc, dnIR_sfc) before NET top
+    dn_offset = 2 if has_dn else 0
 
     for i in range(Ncase):
         vals = np.array([float(x) for x in f.readline().split(',')])
@@ -341,15 +349,18 @@ def read_output_from_content(file_content, tau_target=None):
         alb[i] = vals[3]
         OLR[i] = vals[4]
         ASR[i] = vals[5]
-        dnVIS_sfc[i] = vals[6]
-        dnIR_sfc[i] = vals[7]
-        net_top[i] = vals[8]
-        net_bot[i] = vals[9]
-        T[i, :] = vals[10:10+Nlev]
-        OLR_WL[i, :] = vals[11+Nlev:11+Nlev+L_NSPECTI]
-        ASR_WL[i, :] = vals[11+Nlev+L_NSPECTI:11+Nlev+L_NSPECTI+L_NSPECTV]
-        SFC_dIR[i, :] = vals[11+Nlev+L_NSPECTI+L_NSPECTV:11+Nlev+2*L_NSPECTI+L_NSPECTV]
-        SFC_dVIS[i, :] = vals[11+Nlev+2*L_NSPECTI+L_NSPECTV:]
+        if has_dn:
+            dnVIS_sfc[i] = vals[6]
+            dnIR_sfc[i] = vals[7]
+        net_top[i] = vals[6 + dn_offset]
+        net_bot[i] = vals[7 + dn_offset]
+        b = 8 + dn_offset  # base offset for T levels
+        T[i, :] = vals[b:b+Nlev]
+        p = b + 1 + Nlev  # +1 accounts for 25 T levels vs Nlev=24
+        OLR_WL[i, :] = vals[p:p+L_NSPECTI]
+        ASR_WL[i, :] = vals[p+L_NSPECTI:p+L_NSPECTI+L_NSPECTV]
+        SFC_dIR[i, :] = vals[p+L_NSPECTI+L_NSPECTV:p+2*L_NSPECTI+L_NSPECTV]
+        SFC_dVIS[i, :] = vals[p+2*L_NSPECTI+L_NSPECTV:]
     f.close()
 
     # Compute center wavenumber
