@@ -285,7 +285,7 @@ def read_static_case(file_name: str, tau_target_rounded: float) -> StaticCase:
     itau = int(np.argmin(np.abs(taus - tau_target_rounded)))
     vals = rows[itau]
 
-    base = 8
+    base = 10  # 8 original scalars + 2 new (dnVIS_sfc, dnIR_sfc)
     p = base + NLEV
     OLR_WL = np.array(vals[p:p+L_NSPECTI]);  p += L_NSPECTI
     ASR_WL = np.array(vals[p:p+L_NSPECTV])
@@ -332,8 +332,8 @@ def read_output_from_content(file_content, tau_target=None):
     T = np.zeros((Ncase, Nlev))
     OLR_WL, SFC_dIR = [np.zeros((Ncase, L_NSPECTI)) for _ in range(2)]
     ASR_WL, SFC_dVIS = [np.zeros((Ncase, L_NSPECTV)) for _ in range(2)]
-    tau, ts, net_top, net_bot, alb, OLR, ASR = [np.zeros((Ncase)) for _ in range(7)]
-    
+    tau, ts, net_top, net_bot, alb, OLR, ASR, dnVIS_sfc, dnIR_sfc = [np.zeros((Ncase)) for _ in range(9)]
+
     for i in range(Ncase):
         vals = np.array([float(x) for x in f.readline().split(',')])
         tau[i] = vals[1]
@@ -341,13 +341,15 @@ def read_output_from_content(file_content, tau_target=None):
         alb[i] = vals[3]
         OLR[i] = vals[4]
         ASR[i] = vals[5]
-        net_top[i] = vals[6]
-        net_bot[i] = vals[7]
-        T[i, :] = vals[8:8+Nlev]
-        OLR_WL[i, :] = vals[9+Nlev:9+Nlev+L_NSPECTI]
-        ASR_WL[i, :] = vals[9+Nlev+L_NSPECTI:9+Nlev+L_NSPECTI+L_NSPECTV]
-        SFC_dIR[i, :] = vals[9+Nlev+L_NSPECTI+L_NSPECTV:9+Nlev+2*L_NSPECTI+L_NSPECTV]
-        SFC_dVIS[i, :] = vals[9+Nlev+2*L_NSPECTI+L_NSPECTV:]
+        dnVIS_sfc[i] = vals[6]
+        dnIR_sfc[i] = vals[7]
+        net_top[i] = vals[8]
+        net_bot[i] = vals[9]
+        T[i, :] = vals[10:10+Nlev]
+        OLR_WL[i, :] = vals[11+Nlev:11+Nlev+L_NSPECTI]
+        ASR_WL[i, :] = vals[11+Nlev+L_NSPECTI:11+Nlev+L_NSPECTI+L_NSPECTV]
+        SFC_dIR[i, :] = vals[11+Nlev+L_NSPECTI+L_NSPECTV:11+Nlev+2*L_NSPECTI+L_NSPECTV]
+        SFC_dVIS[i, :] = vals[11+Nlev+2*L_NSPECTI+L_NSPECTV:]
     f.close()
 
     # Compute center wavenumber
@@ -382,7 +384,7 @@ def read_output_from_content(file_content, tau_target=None):
     setattr(MOD, 'Pref', Pref)
 
     # Save variables
-    var_list = ['tau', 'ts', 'alb', 'OLR', 'ASR', 'net_top', 'net_bot', 'OLR_WL', 'ASR_WL', 'SFC_dIR', 'SFC_dVIS', 'T']
+    var_list = ['tau', 'ts', 'alb', 'OLR', 'ASR', 'dnVIS_sfc', 'dnIR_sfc', 'net_top', 'net_bot', 'OLR_WL', 'ASR_WL', 'SFC_dIR', 'SFC_dVIS', 'T']
     for ivar in var_list:
         if tau_target is None:
             setattr(MOD, ivar, eval(ivar))
